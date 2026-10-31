@@ -16,7 +16,6 @@ jobs:
 
     - name: Unzip Source Code (Nếu có file zip)
       run: |
-        # Tự động giải nén nếu mày up file .zip chứa source code
         for f in *.zip; do
           if [ -f "$f" ]; then
             echo "Đang giải nén $f..."
@@ -24,14 +23,14 @@ jobs:
           fi
         done
 
-    - name: Set up Xcode
+    - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: latest
+        xcode-version: '15.0' # Chỉ định rõ phiên bản Xcode để không mất thời gian dò tìm
 
     - name: Find Project and Build
       run: |
-        # Tìm file dự án (bỏ qua thư mục rác __MACOSX)
+        # Tìm file dự án
         PROJECT_PATH=$(find $PWD -name "*.xcodeproj" -not -path "*/__MACOSX/*" -maxdepth 4 | head -n 1)
         WORKSPACE_PATH=$(find $PWD -name "*.xcworkspace" -not -path "*/__MACOSX/*" -maxdepth 4 | head -n 1)
         
@@ -40,22 +39,20 @@ jobs:
         elif [ -n "$PROJECT_PATH" ]; then
             BUILD_TARGET="-project $PROJECT_PATH"
         else
-            echo "LỖI: Không tìm thấy file dự án Xcode!"
+            echo "LỖI: Không tìm thấy file dự án!"
             exit 1
         fi
         
-        # Tự động lấy Scheme của dự án (3105, OGIOS, v.v.)
+        # Tự động lấy Scheme
         SCHEME_NAME=$(xcodebuild $BUILD_TARGET -list | grep -A 100 "Schemes:" | grep -v "Schemes:" | head -n 1 | xargs)
         
-        echo "Đang build dự án: $BUILD_TARGET"
-        echo "Sử dụng Scheme: $SCHEME_NAME"
-        
-        # Build Archive (Không ký Code Signing)
+        # Chạy lệnh build với tốc độ tối đa (dùng 4 luồng)
         xcodebuild $BUILD_TARGET \
                    -scheme "$SCHEME_NAME" \
                    -sdk iphoneos \
                    -configuration Release \
                    -archivePath $PWD/build/App.xcarchive \
+                   -jobs 4 \
                    archive \
                    CODE_SIGN_IDENTITY="" \
                    CODE_SIGNING_REQUIRED=NO \
@@ -64,9 +61,7 @@ jobs:
     - name: Package to IPA
       run: |
         mkdir -p Payload
-        # Copy file .app vào thư mục Payload
         cp -r build/App.xcarchive/Products/Applications/*.app Payload/
-        # Nén thành file IPA với tên PROXYDETALX
         zip -r PROXYDETALX.ipa Payload
         rm -rf Payload
 
